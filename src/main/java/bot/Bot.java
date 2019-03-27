@@ -1,17 +1,20 @@
 package bot;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import helper.ReadFileData;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class Bot extends TelegramLongPollingBot {
 
@@ -23,59 +26,60 @@ public class Bot extends TelegramLongPollingBot {
         return sData.getBotToken();
     }
 
-
-
     public void onUpdateReceived(Update update) {
-        chatId = update.getMessage().getChatId();
-        SendMessage msg = new SendMessage();
 
-        String text = update.getMessage().getText();
-        String mark = String.format("*Hello, %s!*\n" +
-                "_Italic text_", update.getMessage().getFrom().getFirstName());
-        ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
-        keyboardMarkup.setSelective(true);
-        keyboardMarkup.setResizeKeyboard(true);
-        keyboardMarkup.setOneTimeKeyboard(false);
-        ArrayList<KeyboardRow> keyboard = new ArrayList<>();
-        KeyboardRow firstRow = new KeyboardRow();
-        KeyboardRow secondRow = new KeyboardRow();
-        KeyboardRow thirdRow = new KeyboardRow();
 
-        switch (text) {
-            case "Ответить":
-                msg.setChatId(chatId);
-                msg.setText("Отвечаю");
-                ForceReplyKeyboard replyKeyboard = new ForceReplyKeyboard();
-                replyKeyboard.getForceReply();
-                msg.setReplyMarkup(replyKeyboard);
-                break;
-            case "Закрыть":
-                msg.setChatId(chatId);
-                msg.setText("Закрываю клавиатуру");
-                ReplyKeyboardRemove remove = new ReplyKeyboardRemove();
-                remove.getRemoveKeyboard();
-                msg.setReplyMarkup(remove);
-                break;
-            default:
-                firstRow.add(new KeyboardButton("Отправить местоположение").setRequestLocation(true));
-                secondRow.add("Ответить");
-                secondRow.add("Закрыть");
-                thirdRow.add(new KeyboardButton("Отправить контакт").setRequestContact(true));
+        if (update.hasMessage()) {
+            SendMessage mMessage = new SendMessage();
+            chatId = update.getMessage().getChatId();
+            if (update.getMessage().getText().contains("/start")) {
+                mMessage.setChatId(chatId);
+                mMessage.setText("Inline keyboard");
+                InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
+                List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+                List<InlineKeyboardButton> firstRow = new ArrayList<>();
+                List<InlineKeyboardButton> secondRow = new ArrayList<>();
+                firstRow.add(new InlineKeyboardButton("Google").setUrl("https://google.com"));
+                secondRow.add(new InlineKeyboardButton("Reply").setCallbackData("reply"));
+                secondRow.add(new InlineKeyboardButton("Forward").setCallbackData("forward"));
                 keyboard.add(firstRow);
                 keyboard.add(secondRow);
-                keyboard.add(thirdRow);
-                keyboardMarkup.setKeyboard(keyboard);
-                msg.setChatId(chatId);
-                msg.setReplyMarkup(keyboardMarkup);
-                msg.setText("Выбрать...");
-                break;
+                inlineKeyboardMarkup.setKeyboard(keyboard);
+                mMessage.setReplyMarkup(inlineKeyboardMarkup);
+                try {
+                    execute(mMessage);
+                } catch (TelegramApiException e) {
+                    e.printStackTrace();
+                }
+            }
+        } else if (update.hasCallbackQuery()) {
+            SendMessage mMessage = new SendMessage();
+            AnswerCallbackQuery answerCallbackQuery = new AnswerCallbackQuery();
+            chatId = update.getCallbackQuery().getMessage().getChatId();
+            if (update.getCallbackQuery().getData().equals("reply")) {
+                Gson gson = new GsonBuilder().setPrettyPrinting().create();
+                String json = gson.toJson(update.getCallbackQuery());
+                mMessage.setChatId(chatId);
+                mMessage.setText(json);
+                try {
+                    execute(mMessage);
+                } catch (TelegramApiException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (update.getCallbackQuery().getData().equals("forward")) {
+                answerCallbackQuery.setCallbackQueryId(update.getCallbackQuery().getId());
+//                answerCallbackQuery.setShowAlert(true);
+                answerCallbackQuery.setText(update.getCallbackQuery().getData());
+                try {
+                    execute(answerCallbackQuery);
+                } catch (TelegramApiException e) {
+                    e.printStackTrace();
+                }
+            }
         }
 
-        try {
-            execute(msg);
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
+
     }
 
     public String getBotUsername() {
