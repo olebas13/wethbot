@@ -2,11 +2,13 @@ package bot;
 
 import helper.ReadFileData;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.api.methods.AnswerInlineQuery;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.ForwardMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.inlinequery.inputmessagecontent.InputTextMessageContent;
-import org.telegram.telegrambots.meta.api.objects.inlinequery.result.InlineQueryResult;
-import org.telegram.telegrambots.meta.api.objects.inlinequery.result.InlineQueryResultArticle;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
@@ -16,32 +18,91 @@ public class Bot extends TelegramLongPollingBot {
 
     private static ReadFileData sData = new ReadFileData();
 
-    private long chatId;
+    private Long chatId;
+    private Integer messageId;
+    private SendMessage msg;
+
 
     public String getBotToken() {
         return sData.getBotToken();
     }
 
     public void onUpdateReceived(Update update) {
-        if (update.hasInlineQuery()) {
-            AnswerInlineQuery inlineQuery = new AnswerInlineQuery();
-            List<InlineQueryResult> results = new ArrayList<>();
-            for (int i = 0; i < 5; i++) {
-                InlineQueryResultArticle article = new InlineQueryResultArticle();
-                article.setId(Integer.toString(i));
-                article.setTitle("Title " + i);
-                article.setInputMessageContent(new InputTextMessageContent().setMessageText("Article #" + i).enableMarkdown(true));
-                results.add(i, article);
+        if (update.hasMessage()) {
+            chatId = update.getMessage().getChatId();
+            if (update.getMessage().getText().equals("/start")) {
+                msg = new SendMessage();
+                msg.setChatId(chatId);
+                msg.setText("Inline keyboard");
+                msg.setReplyMarkup(getInlineKeyboard());
             }
-            inlineQuery.setInlineQueryId(update.getInlineQuery().getId());
-            inlineQuery.setCacheTime(0);
-            inlineQuery.setResults(results);
             try {
-                execute(inlineQuery);
+                execute(msg);
+            } catch (TelegramApiException e) {
+                e.printStackTrace();
+            }
+        } else if (update.hasCallbackQuery()) {
+            AnswerCallbackQuery callbackQuery = new AnswerCallbackQuery();
+            callbackQuery.setCallbackQueryId(update.getCallbackQuery().getId());
+            messageId = update.getCallbackQuery().getMessage().getMessageId();
+            switch (update.getCallbackQuery().getData()) {
+                case "forward":
+                    ForwardMessage forwardMessage = new ForwardMessage(chatId, chatId, messageId);
+                    try {
+                        execute(forwardMessage);
+                    } catch (TelegramApiException e) {
+                        e.printStackTrace();
+                    }
+                    break;
+                case "reply":
+                    msg = new SendMessage();
+                    msg.setChatId(chatId);
+                    msg.setText("Отвечаем на сообщение");
+                    msg.setReplyToMessageId(messageId);
+                    try {
+                        execute(msg);
+                    } catch (TelegramApiException e) {
+                        e.printStackTrace();
+                    }
+                    break;
+                case "edit":
+                    EditMessageText editMessageText = new EditMessageText();
+                    editMessageText.setText(msg.getText() + " (edited)");
+                    editMessageText.setChatId(chatId);
+                    editMessageText.setMessageId(messageId);
+                    editMessageText.setReplyMarkup(getInlineKeyboard());
+                    try {
+                        execute(editMessageText);
+                    } catch (TelegramApiException e) {
+                        e.printStackTrace();
+                    }
+                    break;
+                case "delete":
+                    break;
+                default:
+                    break;
+            }
+            try {
+                execute(callbackQuery);
             } catch (TelegramApiException e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    private InlineKeyboardMarkup getInlineKeyboard() {
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> firstRow = new ArrayList<>();
+        List<InlineKeyboardButton> secondRow = new ArrayList<>();
+        firstRow.add(new InlineKeyboardButton().setText("Forward").setCallbackData("forward"));
+        firstRow.add(new InlineKeyboardButton().setText("Reply").setCallbackData("reply"));
+        secondRow.add(new InlineKeyboardButton().setText("Edit").setCallbackData("edit"));
+        secondRow.add(new InlineKeyboardButton().setText("Delete").setCallbackData("delete"));
+        keyboard.add(firstRow);
+        keyboard.add(secondRow);
+        keyboardMarkup.setKeyboard(keyboard);
+        return keyboardMarkup;
     }
 
     public String getBotUsername() {
